@@ -1,0 +1,15 @@
+# dsh-auto-review-zh — Host-only bundle.
+#
+# 它不替换、也不修改 DSH 自带的 Auto review。
+# 只在模型调用通道里识别自动审查的 REVIEW_POLICY 请求，在原有安全规则
+# 中间插入一段“中文 wait-what 解释规则”，再交给同一个模型。
+#
+# 临时关闭（改完重启 DSH）：
+#   - id: dsh-auto-review-zh
+#     config:
+#       enabled: false
+- insert:
+    - id: dsh-auto-review-zh
+      name: dsh-auto-review-zh
+      config:
+        enabled: true

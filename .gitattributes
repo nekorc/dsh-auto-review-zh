@@ -1,0 +1,11 @@
+# Normalize line endings in the repository; keep the working tree usable on Windows.
+* text=auto eol=lf
+
+*.js text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+LICENSE text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf

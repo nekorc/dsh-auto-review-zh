@@ -1,0 +1,27 @@
+# Local plugin diagnostics (timestamps / PID / prompt lengths only)
+state/
+
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Test / coverage output
+coverage/
+
+# Package tarballs
+*.tgz
+
+# Editor directories
+.idea/
+.vscode/
