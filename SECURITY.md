@@ -33,7 +33,9 @@ the user-facing denial reason is written in plain Chinese. It does **not**:
 - persist prompt content, tool arguments, or user data.
 
 The diagnostics files under `state/` contain only timestamps, process IDs, and
-prompt lengths.
+prompt lengths; the drift file additionally stores a truncated SHA-256 of the
+fixed upstream review policy so a wording change can be recognised without
+keeping the text.
 
 ## Security model
 

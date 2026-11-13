@@ -1,10 +1,10 @@
 # dsh-auto-review-zh
 
-> 把 DSH **Auto review（自动审查）** 的拒绝理由变成中文、wait-what 风格：先说背景，再说原因，最后告诉你该点“允许一次”还是“拒绝”。
+> 把 DSH **Auto review（自动审查）** 的拒绝理由变成中文、wait-what 风格：先说这次调用做什么，再说后果，最后告诉你该点“允许一次”还是“拒绝”。
 
 [![CI](https://github.com/nekorc/dsh-auto-review-zh/actions/workflows/test.yml/badge.svg)](https://github.com/nekorc/dsh-auto-review-zh/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![DSH](https://img.shields.io/badge/DSH-0.2.1--rc.5-4B6BFB)](https://github.com/deepseek-ai/deepseek-harness)
+[![DSH](https://img.shields.io/badge/DSH-0.2.2--rc.1-4B6BFB)](https://github.com/deepseek-ai/deepseek-harness)
 [![Node](https://img.shields.io/badge/Node-%3E%3D20-339933)](https://nodejs.org/)
 [![Status](https://img.shields.io/badge/status-experimental-orange)](#)
 
@@ -43,8 +43,8 @@ DSH 的 `Auto review` 会在每次工具调用前判断风险；它拒绝时，�
 
 这句话对非技术用户不友好：既没有说清“你刚才想做什么”，也没有说清“允许之后会发生什么”。本插件不是在事后翻译，而是在审查模型**生成理由的那一刻**就要求它用中文、按 wait-what 顺序写：
 
-1. **背景**：你让我做什么，我准备对什么对象执行什么动作；
-2. **原因**：会造成什么后果，为什么按中风险/高风险处理；
+1. **对象**：这次待审的调用要做什么——工具名 + 参数里的目标（路径、命令、URL）；只依据输入里最后一条 `tool-call`，不复述用户的任务；
+2. **后果**：这次调用本身会造成什么结果，落在哪一档风险；
 3. **选择**：现在该点“允许一次”还是“拒绝”，以及更安全的替代做法。
 
 它**不改**风险判定、**不改**审批语义、**不改** JSON 形状，也不增加第二次翻译调用。
@@ -54,13 +54,13 @@ DSH 的 `Auto review` 会在每次工具调用前判断风险；它拒绝时，�
 ## 功能
 
 - 审查模型生成拒绝理由时直接写**简体中文**。
-- 理由固定按 **背景 → 原因 → 选择** 组织，尽量不用未解释的术语。
+- 理由固定按 **对象 → 后果 → 选择** 组织，尽量不用未解释的术语。
 - 不需要额外的翻译 provider，不增加第二次模型调用。
 - 不修改 `app.asar`，不 fork、不修改 DSH 自带的 Auto review 插件。
 - 低/中/高风险判定、允许/拒绝规则、审批按钮行为全部保持原样。
 - 支持通过 profile 配置临时关闭，或完全卸载。
-- 提供两个很小的诊断文件，方便确认插件是否加载、是否增强过审查请求。
-- 12 个单元测试覆盖提示词插入、递归保护、放行、关闭开关和失败回退。
+- 提供三个很小的诊断文件，方便确认插件是否加载、是否增强过审查请求、是否因上游策略变化退回英文。
+- 17 个单元测试覆盖提示词插入与锚定、递归保护、放行、关闭开关、失败回退和策略漂移。
 
 ---
 
@@ -74,9 +74,13 @@ DSH 的 `Auto review` 会在每次工具调用前判断风险；它拒绝时，�
 
 **改造后**
 
-> Auto review 拒绝了此调用：你让我把本地提交推到远端 main 分支。我准备执行强制推送，这会覆盖远端历史，可能丢掉别人的提交，所以按中风险拦下。若你确认远端只有你的提交，可以点“允许一次”；否则请点“拒绝”，并告诉我改用普通推送或先备份。
+> Auto review 拒绝了此调用：这次调用要强制推送到远端 main 分支，会覆盖远端历史，可能丢掉别人的提交，所以按中风险拦下。若你确认远端只有你的提交，可以点“允许一次”；否则请点“拒绝”，并告诉我改用普通推送或先备份。
 
-说明：弹窗开头的 `Auto review` 是功能名，暂时保留英文；正文是中文。
+说明：弹窗开头的 `Auto review` 是功能名，暂时保留英文；正文是中文。理由以**这次调用本身**开头，不复述用户的任务。
+
+### 为什么 0.1.1 改了写法
+
+0.1.0 的模板是“你让我……我准备……”，模型会把**用户的任务**当成被审对象。实测出现过待审 `read fixtures.py`、理由却写“我准备把明文密钥写进 runs/equity_config.toml”的情况；模板里的“为什么按中风险或高风险处理”也预设了拒绝，导致只读调用被抬成中风险。0.1.1 起规则锚定在审查请求的**最后一条 `tool-call`** 上，并明确“本段只约束理由文本、不改变判定”。
 
 ---
 
@@ -87,7 +91,7 @@ Auto review 请求（system 以 REVIEW_POLICY 开头）
         │
         ▼
 llm/stream 监听器（本插件）
-        │  复制请求；在 JSON 格式段之前插入中文规则
+        │  复制请求；在最后一个段落之前插入中文锚定规则
         ▼
 同一个模型 / 同一个 provider
         │
@@ -103,7 +107,7 @@ llm/stream 监听器（本插件）
 1. DSH 每次调用模型都会经过内部通道 `llm/stream`。
 2. 自动审查请求有一个稳定特征：`system` 以 `REVIEW_POLICY` 开头。
 3. 本插件只认这种请求；其他所有模型调用原样放行。
-4. 复制一份请求，在原来的“JSON 格式段”之前插入“中文 wait-what 解释规则”。
+4. 复制一份请求，在“允许格式段”所在的**最后一个段落之前**插入“中文锚定理由规则”。
 5. 用同一个模型、同一个 provider 重新发起这次审查。
 6. 用一个 `WeakSet` 记住已经改过的请求对象，避免递归。
 7. 原来的安全规则一行没删，最后一段仍然是：
@@ -111,7 +115,9 @@ llm/stream 监听器（本插件）
    > For any allow, end with exactly the applicable two-member object and nothing else.
    > Stop immediately after the closing brace.
 
-所以审查模型仍然只返回一个合法 JSON；只是 `reason` 变成了中文。
+8. 找不到安全插入点（上游改了措辞）时**不追加任何文本**，直接按英文原样审查，并写 `state/last-drift.json`。宁可回到英文，也不把规则放到 `Stop immediately after the closing brace.` 之后——那样模型可能在 JSON 后面继续输出，导致审查解析失败。
+
+所以审查模型仍然只返回一个合法 JSON；只是 `reason` 变成了中文，且必须围绕这次待审调用写。
 
 ---
 
@@ -119,6 +125,7 @@ llm/stream 监听器（本插件）
 
 | DSH 版本 | 状态 |
 |---|---|
+| `0.2.2-rc.1` | 已验证（Windows DSH Desktop；`REVIEW_POLICY` 4334 字符、格式段标记仍在） |
 | `0.2.1-rc.5` | 已验证（Windows DSH Desktop） |
 | `0.2.x` | 预期可用 |
 | `0.3.x` | 未验证；`package.json` 的 `engines.dsh` 暂不包含 |
@@ -227,16 +234,17 @@ dsh plugin --profile web add github:nekorc/dsh-auto-review-zh
 | 键 | 默认 | 说明 |
 |---|---|---|
 | `enabled` | `true` | `false` 时回到英文审查理由；Auto review 仍正常工作 |
-| `diagnostics` | `true` | 写两个诊断文件；只含时间戳、PID、提示词长度 |
+| `diagnostics` | `true` | 写三个诊断文件；只含时间戳、PID、提示词长度/指纹 |
 
 改完配置后重启 DSH。诊断文件位于插件目录的：
 
 ```text
-state/loaded.json
-state/last-enhancement.json
+state/loaded.json           插件已加载
+state/last-enhancement.json 最近一次增强（只写长度）
+state/last-drift.json       上游策略变化、本次退回英文（只写长度与提示词指纹）
 ```
 
-它们不记录提示词内容、命令、路径或任何用户数据。
+它们不记录提示词内容、命令、路径或任何用户数据。`last-drift.json` 出现时说明 DSH 改过审查提示词，插件的规则没插进去——Auto review 回到英文，功能不受影响。
 
 ---
 
@@ -286,6 +294,8 @@ state/last-enhancement.json
 | 没有 `state/loaded.json` | 插件没加载：检查 profile 的 bundle、junction 和重启 |
 | `state/last-enhancement.json` 不更新 | 当前会话没有 Auto review 请求：确认权限预设是 Auto；重启 DSH 可能把 Auto 会话迁回完全权限，需要重新选择 |
 | 理由还是英文 | 模型没有遵守插入的规则；确认 DSH 版本和 `REVIEW_POLICY` 是否变化；欢迎附卡片文字开 issue（请先去掉密钥和隐私） |
+| 理由说的动作和卡片里的调用对不上 | 先确认不是 0.1.0：0.1.0 的“你让我……”模板会把用户任务当成被审对象，升级到 0.1.1 并重启；仍然复现就把卡片文字去掉密钥后开 issue |
+| 出现 `state/last-drift.json` | 上游改了审查提示词的措辞，插件没有安全插入点，已主动回到英文。用文件里的 `policySha256` / `policyLength` 对照新版 `REVIEW_POLICY`，更新 `lib/prompt.js` |
 | Auto review 不弹审批 | 审批策略可能是 `never`，或当前不是 Auto preset |
 | DSH 升级后不再生效 | `REVIEW_POLICY` 前缀可能变了；更新 `lib/prompt.js`，或等插件更新 |
 | DSH 启动失败 | 先把 `dsh-auto-review-zh` 从 profile 移除并重启；原 Auto review 不受影响 |
@@ -299,10 +309,11 @@ state/last-enhancement.json
 项目结构：
 
 ```text
-lib/index.js         llm/stream 监听器、递归保护、开关
-lib/prompt.js        提示词识别与中文规则插入
-lib/diagnostics.js   两个诊断文件
+lib/index.js         llm/stream 监听器、递归保护、开关、策略漂移放行
+lib/prompt.js        提示词识别、锚定规则与安全插入点
+lib/diagnostics.js   三个诊断文件
 test/                提示词与中间件单测
+test/fixtures/       上游 REVIEW_POLICY 原文（回归测试插入点）
 cordis.patch.yml     DSH bundle 行
 ```
 
@@ -315,7 +326,7 @@ node --test
 ```
 
 要求：Node `>=20`，无第三方运行时依赖。
-测试覆盖：只识别审查请求、插入位置、幂等、绕过非审查请求、递归保护、关闭开关、同步失败回退。
+测试覆盖：只识别审查请求、插入位置与末行不变、锚定待审调用、反拒绝偏置、真实策略回归、幂等、绕过非审查请求、递归保护、关闭开关、同步失败回退、无插入点时安全退回英文。
 
 GitHub Actions 在 Node 22 / 24 上运行同样的测试。欢迎 fork、开分支、补测试后提交 PR。
 
@@ -325,8 +336,9 @@ GitHub Actions 在 Node 22 / 24 上运行同样的测试。欢迎 fork、开分�
 
 - 审批卡开头的 `Auto review` 是功能名，本次不翻译；正文是中文。
 - 子代理在 `never` 审批策略下的最终英文错误文本不由本插件处理。
-- 模型偶尔可能仍写英文或超出 180 字；提示词已经做了强约束，遇到问题欢迎反馈。
-- 如果 DSH 修改了 `REVIEW_POLICY` 的开头或 JSON 格式段，插件会自动不生效；Auto review 仍可用，只是回到英文。
+- 插件只约束 `reason` 的写法，不能保证模型的风险判定正确；判定仍完全由上游 `REVIEW_POLICY` 决定。
+- 模型偶尔可能仍写英文、超过 160 字，或把理由写偏；提示词已经做了锚定与反偏置约束，遇到问题欢迎反馈。
+- 如果 DSH 修改了 `REVIEW_POLICY` 的开头、段落结构或格式段，插件会自动退回英文（`state/last-drift.json`），Auto review 仍可用。
 - 这是 host 插件：安装、开关、卸载后需要重启 DSH。
 - 只在 Auto preset 下工作，不改变其他权限模式。
 - 它不是通用翻译器，不翻译 DSH 的其他界面或对话内容。
@@ -360,4 +372,4 @@ GitHub Actions 在 Node 22 / 24 上运行同样的测试。欢迎 fork、开分�
 
 ## English summary
 
-`dsh-auto-review-zh` makes DSH Auto review denial reasons understandable to Chinese users. It intercepts the reviewer's `llm/stream` request, inserts a Simplified-Chinese "wait-what" output rule (background → reason → choice) before the strict JSON format paragraph, and sends it to the same model. It does not change risk classification, approval semantics, or the shipped plugin. Disable with `enabled: false`; uninstall without touching `app.asar`. Tested on DSH `0.2.1-rc.5`; Node `>=20`.
+`dsh-auto-review-zh` makes DSH Auto review denial reasons understandable to Chinese users. It intercepts the reviewer's `llm/stream` request, inserts a Simplified-Chinese reason rule **anchored to the last `tool-call` message** before the final format paragraph, and sends it to the same model. The rule only constrains the `reason` text and never changes risk classification or approval semantics; if no safe insertion point exists, the plugin leaves the English prompt untouched and records `state/last-drift.json`. Disable with `enabled: false`; uninstall without touching `app.asar`. Tested on DSH `0.2.2-rc.1` and `0.2.1-rc.5`; Node `>=20`.

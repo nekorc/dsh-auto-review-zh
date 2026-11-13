@@ -10,6 +10,10 @@ You are the final authorization reviewer for exactly one pending tool call.
 For any allow, end with exactly the applicable two-member object and nothing else.
 Stop immediately after the closing brace.`;
 
+/** 有审查前缀、但没有任何段落边界：插件找不到安全插入点。 */
+const NO_INSERTION_POINT = `REVIEW_POLICY
+No paragraph break in this policy at all.`;
+
 function makeCtx() {
   let listener;
   const onCalls = [];
@@ -68,7 +72,16 @@ test('自动审查请求只递归一次，并且用增强后的 system 调用模
   const ctx = makeCtx();
   apply(ctx, { diagnostics: false });
 
-  const original = Object.freeze({ system: BASE, messages: [] });
+  const messages = [{ role: 'user', content: [{ type: 'text', text: 'pending' }] }];
+  const original = Object.freeze({
+    system: BASE,
+    messages,
+    provider: 'p',
+    model: 'm',
+    temperature: 0,
+    purpose: 'auto-review',
+    sessionId: 'session-1',
+  });
   const chunks = await collect(ctx.llm.stream(original));
 
   assert.equal(ctx.llm.calls, 2, '外层请求 + 内层增强请求');
@@ -79,6 +92,15 @@ test('自动审查请求只递归一次，并且用增强后的 system 调用模
   assert.equal(ctx.llm.seen[0].system, BASE);
   assert.ok(ctx.llm.seen[1].system.includes(EXPLANATION_HEADER));
   assert.notEqual(ctx.llm.seen[1], original, '必须复制请求，不能修改冻结的原请求');
+
+  // 只换 system，审查路由与消息一个字都不动。
+  const enhancedOptions = ctx.llm.seen[1];
+  assert.equal(enhancedOptions.messages, messages);
+  assert.equal(enhancedOptions.provider, 'p');
+  assert.equal(enhancedOptions.model, 'm');
+  assert.equal(enhancedOptions.temperature, 0);
+  assert.equal(enhancedOptions.purpose, 'auto-review');
+  assert.equal(enhancedOptions.sessionId, 'session-1');
 
   assert.deepEqual(ctx.onCalls, [
     { event: 'llm/stream', options: { prepend: true, global: true } },
@@ -106,6 +128,18 @@ test('已经增强过的提示词不会再次递归', async () => {
   assert.equal(ctx.llm.calls, 1);
   assert.equal(ctx.llm.nextCalls, 1);
   assert.equal(chunks.map((chunk) => chunk.text).join(''), 'enhanced');
+});
+
+test('找不到安全插入点时退回英文审查，仍然放行且不抛错', async () => {
+  const ctx = makeCtx();
+  apply(ctx, { diagnostics: false });
+
+  const chunks = await collect(ctx.llm.stream({ system: NO_INSERTION_POINT, messages: [] }));
+
+  assert.equal(ctx.llm.calls, 1, '不应发起第二次模型调用');
+  assert.equal(ctx.llm.nextCalls, 1, '原请求必须照常到达下游');
+  assert.equal(ctx.llm.seen[0].system, NO_INSERTION_POINT);
+  assert.equal(chunks.map((chunk) => chunk.text).join(''), 'original');
 });
 
 test('enabled: false 时完全不注册监听器', () => {

@@ -1,6 +1,6 @@
 {
   "name": "dsh-auto-review-zh",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Chinese wait-what explanations for DSH Auto review denials. 让 DSH Auto review 用中文、wait-what 风格解释拒绝理由。",
   "license": "MIT",
   "author": "nekorc",
